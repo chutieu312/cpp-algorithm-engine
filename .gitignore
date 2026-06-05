@@ -1,0 +1,53 @@
+# CMake / build outputs
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+_deps/
+
+# Compiled binaries and libraries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+ave_server
+ave_tests
+
+# Local databases and generated runtime state
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+
+# Logs and coverage
+*.log
+coverage/
+*.gcda
+*.gcno
+*.profraw
+*.profdata
+
+# Environment secrets
+.env
+.env.*
+*.pem
+*.key
+
+# IDE / editor
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db

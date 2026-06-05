@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ── Job 1: Build + Unit Tests (Rocky Linux 9 / RHEL 9 compatible) ─────────
+  build-and-test:
+    name: Build & Test (Rocky Linux 9)
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux:9
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build toolchain
+        run: |
+          dnf install -y gcc-c++ cmake make git openssl-devel
+          dnf clean all
+
+      - name: CMake configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build all targets
+        run: cmake --build build --target ave_server ave_tests -j"$(nproc)"
+
+      - name: Run unit tests (CTest)
+        run: ctest --test-dir build --output-on-failure
+
+  # ── Job 2: AddressSanitizer check ─────────────────────────────────────────
+  asan-check:
+    name: AddressSanitizer (Rocky Linux 9)
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux:9
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build toolchain
+        run: |
+          dnf install -y gcc-c++ cmake make git openssl-devel
+          dnf clean all
+
+      - name: CMake configure with ASan
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+
+      - name: Build test target
+        run: cmake --build build --target ave_tests -j"$(nproc)"
+
+      - name: Run tests under ASan
+        env:
+          ASAN_OPTIONS: abort_on_error=1:detect_leaks=1
+        run: ./build/ave_tests
+
+  # ── Job 3: Valgrind memory check ──────────────────────────────────────────
+  valgrind-check:
+    name: Valgrind Memory Check (Rocky Linux 9)
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux:9
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build toolchain + Valgrind
+        run: |
+          dnf install -y gcc-c++ cmake make git openssl-devel valgrind
+          dnf clean all
+
+      - name: CMake configure (debug, no sanitisers)
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build test target
+        run: cmake --build build --target ave_tests -j"$(nproc)"
+
+      - name: Run tests under Valgrind
+        run: |
+          valgrind \
+            --tool=memcheck \
+            --leak-check=full \
+            --error-exitcode=1 \
+            ./build/ave_tests
+
+  # ── Job 4: Docker build + smoke test ─────────────────────────────────────
+  docker-build:
+    name: Docker Build & Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t ave:ci .
+
+      - name: Start container
+        run: docker run --rm -d --name ave-ci -p 8080:8080 ave:ci
+
+      - name: Wait for service to be ready
+        run: |
+          for i in $(seq 1 15); do
+            curl -sf http://localhost:8080/health && echo "Service ready" && exit 0
+            echo "Attempt $i — waiting…"
+            sleep 3
+          done
+          echo "Service did not start in time" && exit 1
+
+      - name: Smoke test — Kalman filter endpoint
+        run: |
+          curl --fail -X POST http://localhost:8080/api/kalman/run \
+            -H "Content-Type: application/json" \
+            -d '{"x0":0,"p0":1,"q":0.1,"r":1,"measurements":[1.2,2.1,3.0]}'
+
+      - name: Smoke test — OLS endpoint
+        run: |
+          curl --fail -X POST http://localhost:8080/api/leastsq/run \
+            -H "Content-Type: application/json" \
+            -d '{"points":[{"x":1,"y":3},{"x":2,"y":5},{"x":3,"y":7}]}'
+
+      - name: Stop container
+        if: always()
+        run: docker stop ave-ci || true

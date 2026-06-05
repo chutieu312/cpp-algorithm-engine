@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Algorithm Validation Engine</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    header { background: #1e293b; border-bottom: 1px solid #334155; padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
+    header h1 { font-size: 1.25rem; font-weight: 700; color: #f8fafc; }
+    header span { font-size: 0.75rem; background: #0ea5e9; color: #fff; padding: 0.2rem 0.6rem; border-radius: 999px; }
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    @media (max-width: 768px) { main { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; padding: 1.5rem; }
+    .card h2 { font-size: 1rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+    label { display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 0.25rem; margin-top: 0.75rem; }
+    input, textarea { width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 0.4rem; padding: 0.5rem 0.75rem; color: #e2e8f0; font-size: 0.875rem; outline: none; }
+    input:focus, textarea:focus { border-color: #0ea5e9; }
+    textarea { resize: vertical; min-height: 60px; font-family: monospace; }
+    button { margin-top: 1rem; width: 100%; padding: 0.6rem; background: #0ea5e9; color: #fff; border: none; border-radius: 0.4rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+    button:hover { background: #0284c7; }
+    button:disabled { background: #475569; cursor: default; }
+    .result { margin-top: 1rem; background: #0f172a; border-radius: 0.4rem; padding: 0.75rem; font-family: monospace; font-size: 0.78rem; color: #86efac; white-space: pre-wrap; max-height: 200px; overflow-y: auto; display: none; }
+    .error { color: #f87171; }
+    .chart-wrap { margin-top: 1rem; }
+    .full-width { grid-column: 1 / -1; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th { text-align: left; color: #64748b; padding: 0.4rem 0.6rem; border-bottom: 1px solid #334155; }
+    td { padding: 0.4rem 0.6rem; border-bottom: 1px solid #1e293b; vertical-align: top; }
+    td:last-child { font-family: monospace; color: #7dd3fc; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
+    .badge-kalman  { background: #1d4ed8; color: #bfdbfe; }
+    .badge-leastsq { background: #15803d; color: #bbf7d0; }
+    #historyEmpty { color: #475569; text-align: center; padding: 1.5rem; display: none; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Algorithm Validation Engine</h1>
+  <span>C++ · Rocky Linux 9</span>
+</header>
+
+<main>
+  <!-- ── Kalman Filter ── -->
+  <div class="card">
+    <h2>Kalman Filter</h2>
+    <label>Initial state x₀</label>
+    <input id="kf-x0" type="number" value="0" step="any" />
+    <label>Initial covariance p₀ (> 0)</label>
+    <input id="kf-p0" type="number" value="1" step="any" />
+    <label>Process noise Q (≥ 0)</label>
+    <input id="kf-q"  type="number" value="0.1" step="any" />
+    <label>Measurement noise R (> 0)</label>
+    <input id="kf-r"  type="number" value="1" step="any" />
+    <label>Measurements (comma-separated)</label>
+    <input id="kf-meas" type="text" value="1.2, 2.1, 3.0, 3.8, 5.1, 6.0, 7.2, 8.0, 9.1, 10.0" />
+    <button id="kf-btn" onclick="runKalman()">Run Kalman Filter</button>
+    <div id="kf-result" class="result"></div>
+    <div class="chart-wrap"><canvas id="kf-chart"></canvas></div>
+  </div>
+
+  <!-- ── OLS Regression ── -->
+  <div class="card">
+    <h2>OLS Regression</h2>
+    <label>Data points (JSON array of {x,y})</label>
+    <textarea id="ols-points" rows="5">
+[{"x":1,"y":3.1},{"x":2,"y":5.0},{"x":3,"y":6.9},
+ {"x":4,"y":9.2},{"x":5,"y":10.8},{"x":6,"y":13.1}]</textarea>
+    <button id="ols-btn" onclick="runOls()">Run OLS Regression</button>
+    <div id="ols-result" class="result"></div>
+    <div class="chart-wrap"><canvas id="ols-chart"></canvas></div>
+  </div>
+
+  <!-- ── Computation History ── -->
+  <div class="card full-width">
+    <h2>Computation History <button id="refresh-btn" style="width:auto;margin:0;padding:0.3rem 1rem;font-size:0.8rem;float:right" onclick="loadHistory()">Refresh</button></h2>
+    <div id="historyEmpty">No runs yet — submit a Kalman or OLS request above.</div>
+    <table id="history-table" style="display:none">
+      <thead><tr><th>#</th><th>Algorithm</th><th>Time</th><th>Result preview</th></tr></thead>
+      <tbody id="history-body"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+  const API = '';   // same origin
+
+  let kfChart = null, olsChart = null;
+
+  async function runKalman() {
+    const btn = document.getElementById('kf-btn');
+    const out = document.getElementById('kf-result');
+    btn.disabled = true;
+    out.style.display = 'block';
+    out.className = 'result';
+    out.textContent = 'Running…';
+
+    const x0   = parseFloat(document.getElementById('kf-x0').value);
+    const p0   = parseFloat(document.getElementById('kf-p0').value);
+    const q    = parseFloat(document.getElementById('kf-q').value);
+    const r    = parseFloat(document.getElementById('kf-r').value);
+    const meas = document.getElementById('kf-meas').value
+                   .split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+
+    try {
+      const res = await fetch(`${API}/api/kalman/run`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({x0, p0, q, r, measurements: meas})
+      });
+      const data = await res.json();
+      if (!res.ok) { out.className = 'result error'; out.textContent = data.error; return; }
+
+      out.textContent = JSON.stringify(data, null, 2);
+      drawKalmanChart(meas, data.states.map(s => s.state));
+      loadHistory();
+    } catch (e) {
+      out.className = 'result error';
+      out.textContent = e.message;
+    } finally { btn.disabled = false; }
+  }
+
+  async function runOls() {
+    const btn = document.getElementById('ols-btn');
+    const out = document.getElementById('ols-result');
+    btn.disabled = true;
+    out.style.display = 'block';
+    out.className = 'result';
+    out.textContent = 'Running…';
+
+    try {
+      const points = JSON.parse(document.getElementById('ols-points').value);
+      const res = await fetch(`${API}/api/leastsq/run`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({points})
+      });
+      const data = await res.json();
+      if (!res.ok) { out.className = 'result error'; out.textContent = data.error; return; }
+
+      out.textContent = `slope: ${data.slope.toFixed(4)}\nintercept: ${data.intercept.toFixed(4)}\nR²: ${data.r_squared.toFixed(6)}`;
+      drawOlsChart(points, data.predictions);
+      loadHistory();
+    } catch (e) {
+      out.className = 'result error';
+      out.textContent = e.message;
+    } finally { btn.disabled = false; }
+  }
+
+  function drawKalmanChart(measurements, states) {
+    const labels = measurements.map((_, i) => `t${i+1}`);
+    const ctx = document.getElementById('kf-chart').getContext('2d');
+    if (kfChart) kfChart.destroy();
+    kfChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {label: 'Measurement', data: measurements, borderColor: '#f87171', borderDash:[5,3], pointRadius:3, fill:false},
+          {label: 'Kalman estimate', data: states, borderColor: '#34d399', pointRadius:3, fill:false}
+        ]
+      },
+      options: { plugins:{legend:{labels:{color:'#94a3b8'}}}, scales:{x:{ticks:{color:'#64748b'}},y:{ticks:{color:'#64748b'}}} }
+    });
+  }
+
+  function drawOlsChart(points, predictions) {
+    const sorted = [...points].sort((a,b) => a.x - b.x);
+    const predMap = Object.fromEntries(predictions.map(p => [p.x, p.y_predicted]));
+    const ctx = document.getElementById('ols-chart').getContext('2d');
+    if (olsChart) olsChart.destroy();
+    olsChart = new Chart(ctx, {
+      type: 'scatter',
+      data: {
+        datasets: [
+          {label:'Data points', data: sorted.map(p=>({x:p.x,y:p.y})), backgroundColor:'#f87171', pointRadius:5},
+          {label:'Fitted line', type:'line', data: sorted.map(p=>({x:p.x,y:predMap[p.x]})), borderColor:'#34d399', pointRadius:0, fill:false}
+        ]
+      },
+      options: { plugins:{legend:{labels:{color:'#94a3b8'}}}, scales:{x:{ticks:{color:'#64748b'}},y:{ticks:{color:'#64748b'}}} }
+    });
+  }
+
+  async function loadHistory() {
+    try {
+      const res  = await fetch(`${API}/api/runs`);
+      const runs = await res.json();
+      const tbody = document.getElementById('history-body');
+      const empty = document.getElementById('historyEmpty');
+      const table = document.getElementById('history-table');
+
+      tbody.innerHTML = '';
+      if (!runs.length) { table.style.display='none'; empty.style.display='block'; return; }
+
+      table.style.display = 'table'; empty.style.display = 'none';
+      runs.forEach(r => {
+        const tr = document.createElement('tr');
+        const preview = r.algorithm === 'kalman'
+          ? `final_state: ${r.output_json?.final_state?.toFixed(4) ?? '—'}`
+          : `slope: ${r.output_json?.slope?.toFixed(4) ?? '—'}, R²: ${r.output_json?.r_squared?.toFixed(4) ?? '—'}`;
+        tr.innerHTML = `<td>${r.id}</td>
+          <td><span class="badge badge-${r.algorithm}">${r.algorithm}</span></td>
+          <td>${r.created_at}</td><td title="${preview}">${preview}</td>`;
+        tbody.appendChild(tr);
+      });
+    } catch { /* ignore on first load */ }
+  }
+
+  loadHistory();
+</script>
+</body>
+</html>
