@@ -34,7 +34,7 @@ services:
 
   # ── Adminer (SQLite database browser) ─────────────────────────────────────
   adminer:
-    image: adminer:4
+    build: ./adminer
     ports:
       - "8889:8080"
     volumes:
