@@ -44,7 +44,7 @@ jobs:
 
       - name: Install build toolchain
         run: |
-          dnf install -y gcc-c++ cmake make git openssl-devel
+          dnf install -y gcc-c++ cmake make git openssl-devel libasan
           dnf clean all
 
       - name: CMake configure with ASan
